@@ -1,0 +1,6 @@
+{
+  "AppSyncApiName": "todovue",
+  "DynamoDBBillingMode": "PAY_PER_REQUEST",
+  "DynamoDBEnableServerSideEncryption": false,
+  "AuthModeLastUpdated": "2022-12-26T16:41:56.591Z"
+}
