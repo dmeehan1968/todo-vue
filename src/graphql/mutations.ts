@@ -2,6 +2,11 @@
 /* eslint-disable */
 // this is an auto generated file. This will be overwritten
 
+export const toggleCompleted = /* GraphQL */ `
+  mutation ToggleCompleted {
+    toggleCompleted
+  }
+`;
 export const createTodo = /* GraphQL */ `
   mutation CreateTodo(
     $input: CreateTodoInput!
@@ -11,8 +16,12 @@ export const createTodo = /* GraphQL */ `
       id
       name
       description
+      completed
       createdAt
       updatedAt
+      _version
+      _deleted
+      _lastChangedAt
     }
   }
 `;
@@ -25,8 +34,12 @@ export const updateTodo = /* GraphQL */ `
       id
       name
       description
+      completed
       createdAt
       updatedAt
+      _version
+      _deleted
+      _lastChangedAt
     }
   }
 `;
@@ -39,8 +52,12 @@ export const deleteTodo = /* GraphQL */ `
       id
       name
       description
+      completed
       createdAt
       updatedAt
+      _version
+      _deleted
+      _lastChangedAt
     }
   }
 `;
