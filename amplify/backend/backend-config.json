@@ -10,17 +10,19 @@
             }
           ],
           "defaultAuthentication": {
-            "authenticationType": "API_KEY",
             "apiKeyConfig": {
               "apiKeyExpirationDays": 30,
-              "apiKeyExpirationDate": "2023-01-25T16:41:52.631Z",
-              "description": "todovue-apikey"
-            }
+              "description": "api key description"
+            },
+            "authenticationType": "API_KEY"
           }
         }
       },
       "providerPlugin": "awscloudformation",
       "service": "AppSync"
     }
-  }
+  },
+  "auth": {},
+  "function": {},
+  "storage": {}
 }

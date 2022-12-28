@@ -12,8 +12,8 @@ type EagerTodo = {
     readOnlyFields: 'createdAt' | 'updatedAt';
   };
   readonly id: string;
-  readonly text: string;
-  readonly done?: boolean | null;
+  readonly name: string;
+  readonly description?: string | null;
   readonly createdAt?: string | null;
   readonly updatedAt?: string | null;
 }
@@ -24,8 +24,8 @@ type LazyTodo = {
     readOnlyFields: 'createdAt' | 'updatedAt';
   };
   readonly id: string;
-  readonly text: string;
-  readonly done?: boolean | null;
+  readonly name: string;
+  readonly description?: string | null;
   readonly createdAt?: string | null;
   readonly updatedAt?: string | null;
 }

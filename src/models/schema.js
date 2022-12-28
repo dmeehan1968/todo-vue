@@ -10,17 +10,17 @@ export const schema = {
                     "isRequired": true,
                     "attributes": []
                 },
-                "text": {
-                    "name": "text",
+                "name": {
+                    "name": "name",
                     "isArray": false,
                     "type": "String",
                     "isRequired": true,
                     "attributes": []
                 },
-                "done": {
-                    "name": "done",
+                "description": {
+                    "name": "description",
                     "isArray": false,
-                    "type": "Boolean",
+                    "type": "String",
                     "isRequired": false,
                     "attributes": []
                 },
@@ -70,5 +70,5 @@ export const schema = {
     "enums": {},
     "nonModels": {},
     "codegenVersion": "3.3.2",
-    "version": "01ddfb5855393d1e592e3e79890d6860"
+    "version": "4401034582a70c60713e1f7f9da3b752"
 };
