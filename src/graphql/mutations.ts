@@ -2,11 +2,6 @@
 /* eslint-disable */
 // this is an auto generated file. This will be overwritten
 
-export const toggleCompleted = /* GraphQL */ `
-  mutation ToggleCompleted {
-    toggleCompleted
-  }
-`;
 export const createTodo = /* GraphQL */ `
   mutation CreateTodo(
     $input: CreateTodoInput!

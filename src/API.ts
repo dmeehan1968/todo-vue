@@ -169,10 +169,6 @@ export type ModelSubscriptionBooleanInput = {
   eq?: boolean | null,
 };
 
-export type ToggleCompletedMutation = {
-  toggleCompleted?: string | null,
-};
-
 export type CreateTodoMutationVariables = {
   input: CreateTodoInput,
   condition?: ModelTodoConditionInput | null,

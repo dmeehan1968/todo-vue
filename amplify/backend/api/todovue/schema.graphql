@@ -4,7 +4,3 @@ type Todo @model @auth(rules: [{allow: public}]) {
   description: String
   completed: Boolean
 }
-
-type Mutation {
-    toggleCompleted: String @function(name: "toggleCompleted-${env}")
-}

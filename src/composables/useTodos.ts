@@ -28,17 +28,25 @@ export function useTodos() {
 
     const toggleCompleted = async (id: string): Promise<void> => {
         try {
-            const index = todos.value.findIndex(todo => todo.id === id)
-            if (index >= 0) {
-                const input = {
-                    id,
-                    completed: !todos.value[index].completed,
-                    _version: todos.value[index]._version,
-                }
-                const response = await API.graphql<GraphQLQuery<UpdateTodoMutation>>(graphqlOperation(updateTodo, { input }))
-                if (response?.data?.updateTodo) {
-                    todos.value[index] = response.data.updateTodo
-                }
+            const todo = todos.value.find(todo => todo.id === id)
+            console.log(todo)
+            if (todo) {
+                const update = await API.graphql<GraphQLQuery<UpdateTodoMutation>>(graphqlOperation(updateTodo, {
+                    input: {
+                        id,
+                        completed: !todo.completed,
+                        _version: todo._version,
+                    },
+                    condition: {
+                        completed: { eq: todo.completed }
+                    }
+                }))
+                if (update.data?.updateTodo) {
+                    const index = todos.value.findIndex(todo => todo.id === id)
+                    if (index >= 0) {
+                        todos.value[index] = update.data.updateTodo
+                    }
+                } else console.log(update)
             }
         } catch (e) {
             // TODO: error handling
