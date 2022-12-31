@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "paths": {
+    "/todos": {
+      "name": "/todos",
+      "lambdaFunction": "todosLambda",
+      "permissions": {
+        "setting": "protected",
+        "auth": [
+          "create",
+          "read",
+          "update",
+          "delete"
+        ],
+        "guest": [
+          "read"
+        ]
+      }
+    }
+  }
+}
