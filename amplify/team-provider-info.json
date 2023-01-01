@@ -20,7 +20,7 @@
       "function": {
         "todosLambda": {
           "deploymentBucketName": "amplify-amplifye43b6cb74b704-staging-161116-deployment",
-          "s3Key": "amplify-builds/todosLambda-54493266483869324a30-build.zip"
+          "s3Key": "amplify-builds/todosLambda-546553416c4e31677866-build.zip"
         }
       },
       "auth": {

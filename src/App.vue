@@ -26,24 +26,38 @@
 
 <script setup lang="ts">
 import { Authenticator } from '@aws-amplify/ui-vue'
-import { ref } from "vue"
+import { ref, watch } from "vue"
 import { API } from "aws-amplify"
 
-function useTodos() {
-  const todos = ref([])
-  function getTodos() {
-    console.log('Get Todos')
-    API.get('todosApi', '/todos/x', {})
-        .then(res => console.log(res))
-        .catch(e => console.log(e))
+interface ApiOptions<T> {
+  default?(): T
+}
+function useApi<T = any>(api: string, path: string, init: Record<string, any>, opts: ApiOptions<T> = {}) {
+  const data = ref(opts?.default?.())
+  const errors = ref([] as string[])
+  const pending = ref(false)
+
+  async function execute() {
+    try {
+      pending.value = true
+      data.value = await API.get(api, path, init)
+    } catch(e) {
+      errors.value.push(String(e))
+    } finally {
+      pending.value = false
+    }
   }
 
-  return { todos, getTodos }
+  return { data, errors, pending, execute }
 }
 
-const { todos, getTodos } = useTodos()
+const { data: todos, execute: getTodos, errors } = useApi('todosApi', '/todos', {}, {
+  default: () => ([])
+})
 
-
+watch([todos, errors], ([todos, errors]) => {
+  console.log({ todos, errors })
+})
 
 // import { useTodos } from "@/composables/useTodos"
 //
