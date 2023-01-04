@@ -2,18 +2,26 @@
   <Authenticator>
     <template v-slot="{ user, signOut }">
       <div class="welcome">
-        <h1>Hey {{ user.username }}</h1>
+        <h3>Hey {{ user.username }}</h3>
         <button @click="signOut">Sign Out</button>
       </div>
       <h1>Todos</h1>
-      <div>
-        <button @click="getTodos">Get Todos</button>
-      </div>
-      <ul>
+      <p v-if="pending">Loading...</p>
+      <ul v-else-if="todos.length ?? false">
         <li v-for="todo in todos">
-          {{ todo.name }}
+          <label>
+            <input type="checkbox" :checked="todo.completed" @click="toggleCompleted(todo)" />
+            {{ todo.name }}
+            (<a href="" @click.prevent="deleteTodo(todo)">X</a>)
+          </label>
         </li>
       </ul>
+      <p v-else>None found</p>
+      <div>
+        <input type="text" placeholder="title" v-model="title" />
+        <button @click="createTodo" :disabled="title.length === 0">Submit</button>
+      </div>
+      <button @click="refresh">Refresh</button>
     </template>
   </Authenticator>
 <!--  <div v-if="pending">Loading...</div>-->
@@ -26,21 +34,27 @@
 
 <script setup lang="ts">
 import { Authenticator } from '@aws-amplify/ui-vue'
-import { ref, watch } from "vue"
+import { ref } from "vue"
 import { API } from "aws-amplify"
+import { v4 as uuid } from "uuid"
 
-interface ApiOptions<T> {
-  default?(): T
+interface Todo {
+  id: string
+  name: string
+  completed: boolean
 }
-function useApi<T = any>(api: string, path: string, init: Record<string, any>, opts: ApiOptions<T> = {}) {
-  const data = ref(opts?.default?.())
+
+function useTodos() {
+  const data = ref([] as Todo[])
   const errors = ref([] as string[])
   const pending = ref(false)
+  const apiName = 'todosApi'
+  const path = '/todos'
 
   async function execute() {
     try {
       pending.value = true
-      data.value = await API.get(api, path, init)
+      data.value = await API.get(apiName, path, {})
     } catch(e) {
       errors.value.push(String(e))
     } finally {
@@ -48,16 +62,47 @@ function useApi<T = any>(api: string, path: string, init: Record<string, any>, o
     }
   }
 
-  return { data, errors, pending, execute }
+  async function createTodo() {
+    const body = { id: uuid(), name: title.value, completed: false }
+    try {
+      await API.put(apiName, path, { body })
+      data.value.push(body)
+      title.value = ''
+    } catch (e) {
+      console.log('error', e)
+    }
+  }
+
+  async function deleteTodo(todo: Todo) {
+    try {
+      await API.del(apiName, `${path}/object/${todo.id}`, {})
+      data.value = data.value.filter(item => item.id !== todo.id)
+    } catch (e) {
+      console.log('error', e)
+    }
+  }
+
+  async function toggleCompleted(todo: Todo) {
+    try {
+      const body = { ...todo, completed: !todo.completed }
+      await API.post(apiName, path, { body })
+      const index = data.value.findIndex(item => item.id === todo.id)
+      if (index >= 0) {
+        data.value[index] = { ...body }
+      }
+    } catch (e) {
+      console.log('error', e)
+    }
+  }
+
+  setTimeout(execute, 0)
+
+  return { data, errors, pending, execute, createTodo, deleteTodo, toggleCompleted }
 }
 
-const { data: todos, execute: getTodos, errors } = useApi('todosApi', '/todos', {}, {
-  default: () => ([])
-})
+const title = ref('')
 
-watch([todos, errors], ([todos, errors]) => {
-  console.log({ todos, errors })
-})
+const { pending, data: todos, errors, execute: refresh, createTodo, deleteTodo, toggleCompleted } = useTodos()
 
 // import { useTodos } from "@/composables/useTodos"
 //
