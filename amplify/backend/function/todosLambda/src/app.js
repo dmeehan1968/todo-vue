@@ -1,218 +1,103 @@
-/*
-Copyright 2017 - 2017 Amazon.com, Inc. or its affiliates. All Rights Reserved.
-Licensed under the Apache License, Version 2.0 (the "License"). You may not use this file except in compliance with the License. A copy of the License is located at
-    http://aws.amazon.com/apache2.0/
-or in the "license" file accompanying this file. This file is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and limitations under the License.
-*/
-
-
-
-const AWS = require('aws-sdk')
-const awsServerlessExpressMiddleware = require('aws-serverless-express/middleware')
-const bodyParser = require('body-parser')
-const express = require('express')
-
-AWS.config.update({ region: process.env.TABLE_REGION });
-
-const dynamodb = new AWS.DynamoDB.DocumentClient();
-
-let tableName = "todosTable";
-if (process.env.ENV && process.env.ENV !== "NONE") {
-  tableName = tableName + '-' + process.env.ENV;
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.app = void 0;
+const express_1 = __importDefault(require("express"));
+const aws_sdk_1 = __importDefault(require("aws-sdk"));
+const body_parser_1 = __importDefault(require("body-parser"));
+const middleware_1 = __importDefault(require("aws-serverless-express/middleware"));
+const uuid_1 = __importDefault(require("uuid"));
+const express_2 = require("@awaitjs/express");
+aws_sdk_1.default.config.update({ region: process.env.TABLE_REGION });
+const dynamodb = new aws_sdk_1.default.DynamoDB.DocumentClient();
+const TableName = `todosTable${process.env.ENV && process.env.ENV !== 'NONE' ? '-' + process.env.ENV : ''}`;
+const path = '/todos';
+exports.app = (0, express_2.addAsync)((0, express_1.default)());
+exports.app.use(body_parser_1.default.json());
+exports.app.use(middleware_1.default.eventContext());
+exports.app.use((req, res, next) => {
+    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Access-Control-Allow-Headers', '*');
+    next();
+});
+function isTodo(obj) {
+    return obj
+        && typeof obj === 'object'
+        && typeof obj.id === 'string'
+        && typeof obj.name === 'string'
+        && typeof obj.completed === 'boolean';
 }
-
-const userIdPresent = false; // TODO: update in case is required to use that definition
-const partitionKeyName = "id";
-const partitionKeyType = "S";
-const sortKeyName = "";
-const sortKeyType = "";
-const hasSortKey = sortKeyName !== "";
-const path = "/todos";
-const UNAUTH = 'UNAUTH';
-const hashKeyPath = '/:' + partitionKeyName;
-const sortKeyPath = hasSortKey ? '/:' + sortKeyName : '';
-
-// declare a new express app
-const app = express()
-app.use(bodyParser.json())
-app.use(awsServerlessExpressMiddleware.eventContext())
-
-// Enable CORS for all methods
-app.use(function(req, res, next) {
-  res.header("Access-Control-Allow-Origin", "*")
-  res.header("Access-Control-Allow-Headers", "*")
-  next()
-});
-
-// convert url string param to expected Type
-const convertUrlType = (param, type) => {
-  switch(type) {
-    case "N":
-      return Number.parseInt(param);
-    default:
-      return param;
-  }
+function isCreateTodoInput(obj) {
+    return obj
+        && typeof obj === 'object'
+        && typeof obj.id === 'undefined'
+        && typeof obj.name === 'string'
+        && typeof obj.completed === 'boolean';
 }
-
-/********************************
- * HTTP Get method for list objects *
- ********************************/
-
-app.get(path, function(req, res) {
-  let queryParams = {
-    TableName: tableName,
-  }
-
-  dynamodb.scan(queryParams, (err, data) => {
-    if (err) {
-      res.statusCode = 500;
-      res.json({error: 'Could not load items: ' + err});
-    } else {
-      res.json(data.Items);
+function isCollection(obj, test) {
+    return obj
+        && Array.isArray(obj)
+        && obj.reduce((acc, cur) => acc && test(cur), true);
+}
+// list
+exports.app.getAsync(path, async (req, res) => {
+    const data = await dynamodb
+        .scan({ TableName })
+        .promise();
+    if (isCollection(data.Items, isTodo)) {
+        res.json({ data: data.Items });
     }
-  });
+    else {
+        throw 'Could not load items';
+    }
 });
-
-/*****************************************
- * HTTP Get method for get single object *
- *****************************************/
-
-app.get(path + '/object' + hashKeyPath + sortKeyPath, function(req, res) {
-  const params = {};
-  if (userIdPresent && req.apiGateway) {
-    params[partitionKeyName] = req.apiGateway.event.requestContext.identity.cognitoIdentityId || UNAUTH;
-  } else {
-    params[partitionKeyName] = req.params[partitionKeyName];
-    try {
-      params[partitionKeyName] = convertUrlType(req.params[partitionKeyName], partitionKeyType);
-    } catch(err) {
-      res.statusCode = 500;
-      res.json({error: 'Wrong column type ' + err});
+// get item
+exports.app.getAsync(path + '/:id', async (req, res) => {
+    const { id } = req.params;
+    if (!uuid_1.default.validate(id)) {
+        throw 'id is not a valid UUID';
     }
-  }
-  if (hasSortKey) {
-    try {
-      params[sortKeyName] = convertUrlType(req.params[sortKeyName], sortKeyType);
-    } catch(err) {
-      res.statusCode = 500;
-      res.json({error: 'Wrong column type ' + err});
+    const data = await dynamodb
+        .get({ TableName, Key: { id } })
+        .promise();
+    if (!isTodo(data.Item)) {
+        throw 'Could not fetch item';
     }
-  }
-
-  let getItemParams = {
-    TableName: tableName,
-    Key: params
-  }
-
-  dynamodb.get(getItemParams,(err, data) => {
-    if(err) {
-      res.statusCode = 500;
-      res.json({error: 'Could not load items: ' + err.message});
-    } else {
-      if (data.Item) {
-        res.json(data.Item);
-      } else {
-        res.json(data) ;
-      }
-    }
-  });
+    res.json({ data: data.Item });
 });
-
-
-/************************************
-* HTTP put method for insert object *
-*************************************/
-
-app.put(path, function(req, res) {
-
-  if (userIdPresent) {
-    req.body['userId'] = req.apiGateway.event.requestContext.identity.cognitoIdentityId || UNAUTH;
-  }
-
-  let putItemParams = {
-    TableName: tableName,
-    Item: req.body
-  }
-  dynamodb.put(putItemParams, (err, data) => {
-    if (err) {
-      res.statusCode = 500;
-      res.json({ error: err, url: req.url, body: req.body });
-    } else{
-      res.json({ success: 'put call succeed!', url: req.url, data: data })
+// create item
+exports.app.postAsync(path, async (req, res) => {
+    const todo = req.body;
+    if (!isCreateTodoInput(todo)) {
+        throw 'Request body is not a valid todo';
     }
-  });
+    const data = await dynamodb
+        .put({ TableName, Item: todo })
+        .promise();
+    res.json({ data });
 });
-
-/************************************
-* HTTP post method for insert object *
-*************************************/
-
-app.post(path, function(req, res) {
-
-  if (userIdPresent) {
-    req.body['userId'] = req.apiGateway.event.requestContext.identity.cognitoIdentityId || UNAUTH;
-  }
-
-  let putItemParams = {
-    TableName: tableName,
-    Item: req.body
-  }
-  dynamodb.put(putItemParams, (err, data) => {
-    if (err) {
-      res.statusCode = 500;
-      res.json({error: err, url: req.url, body: req.body});
-    } else {
-      res.json({success: 'post call succeed!', url: req.url, data: data})
+// toggle item
+exports.app.putAsync(`${path}/:id`, async (req, res) => {
+    const { id } = req.params;
+    if (!uuid_1.default.validate(id)) {
+        throw 'id is not a valid UUID';
     }
-  });
+    const { Item: todo } = await dynamodb
+        .get({ TableName, Key: { id } })
+        .promise();
+    if (!isTodo(todo)) {
+        throw 'No matching todo';
+    }
+    const update = await dynamodb
+        .put({ TableName, Item: Object.assign(Object.assign({}, todo), { completed: !todo.completed }) })
+        .promise();
+    res.json({ data: update });
 });
-
-/**************************************
-* HTTP remove method to delete object *
-***************************************/
-
-app.delete(path + '/object' + hashKeyPath + sortKeyPath, function(req, res) {
-  const params = {};
-  if (userIdPresent && req.apiGateway) {
-    params[partitionKeyName] = req.apiGateway.event.requestContext.identity.cognitoIdentityId || UNAUTH;
-  } else {
-    params[partitionKeyName] = req.params[partitionKeyName];
-     try {
-      params[partitionKeyName] = convertUrlType(req.params[partitionKeyName], partitionKeyType);
-    } catch(err) {
-      res.statusCode = 500;
-      res.json({error: 'Wrong column type ' + err});
-    }
-  }
-  if (hasSortKey) {
-    try {
-      params[sortKeyName] = convertUrlType(req.params[sortKeyName], sortKeyType);
-    } catch(err) {
-      res.statusCode = 500;
-      res.json({error: 'Wrong column type ' + err});
-    }
-  }
-
-  let removeItemParams = {
-    TableName: tableName,
-    Key: params
-  }
-  dynamodb.delete(removeItemParams, (err, data)=> {
-    if (err) {
-      res.statusCode = 500;
-      res.json({error: err, url: req.url});
-    } else {
-      res.json({url: req.url, data: data});
-    }
-  });
+exports.app.use((err, req, res, next) => {
+    res
+        .status(500)
+        .json({ error: String(err) });
 });
-
-app.listen(3000, function() {
-  console.log("App started")
-});
-
-// Export the app object. When executing the application local this does nothing. However,
-// to port it to AWS Lambda we will create a wrapper around that will load the app from
-// this file
-module.exports = app
+exports.app.listen(3000, () => console.log('App started'));

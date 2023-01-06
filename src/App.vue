@@ -54,7 +54,7 @@ function useTodos() {
   async function execute() {
     try {
       pending.value = true
-      data.value = await API.get(apiName, path, {})
+      data.value = (await API.get(apiName, path, {})).data
     } catch(e) {
       errors.value.push(String(e))
     } finally {
@@ -65,7 +65,7 @@ function useTodos() {
   async function createTodo() {
     const body = { id: uuid(), name: title.value, completed: false }
     try {
-      await API.put(apiName, path, { body })
+      await API.post(apiName, path, { body })
       data.value.push(body)
       title.value = ''
     } catch (e) {
@@ -75,7 +75,7 @@ function useTodos() {
 
   async function deleteTodo(todo: Todo) {
     try {
-      await API.del(apiName, `${path}/object/${todo.id}`, {})
+      await API.del(apiName, `${path}/${todo.id}`, {})
       data.value = data.value.filter(item => item.id !== todo.id)
     } catch (e) {
       console.log('error', e)
@@ -84,11 +84,11 @@ function useTodos() {
 
   async function toggleCompleted(todo: Todo) {
     try {
-      const body = { ...todo, completed: !todo.completed }
-      await API.post(apiName, path, { body })
+      const res = await API.put(apiName, `${path}/${todo.id}`, {})
+      console.log(res)
       const index = data.value.findIndex(item => item.id === todo.id)
       if (index >= 0) {
-        data.value[index] = { ...body }
+        data.value[index] = { ...data.value[index], completed: !data.value[index].completed }
       }
     } catch (e) {
       console.log('error', e)

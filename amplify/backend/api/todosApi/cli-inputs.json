@@ -11,9 +11,6 @@
           "read",
           "update",
           "delete"
-        ],
-        "guest": [
-          "read"
         ]
       }
     }
