@@ -36,7 +36,6 @@
 import { Authenticator } from '@aws-amplify/ui-vue'
 import { ref } from "vue"
 import { API } from "aws-amplify"
-import { v4 as uuid } from "uuid"
 
 interface Todo {
   id: string
@@ -63,11 +62,13 @@ function useTodos() {
   }
 
   async function createTodo() {
-    const body = { id: uuid(), name: title.value, completed: false }
+    const body = { name: title.value, completed: false }
     try {
-      await API.post(apiName, path, { body })
-      data.value.push(body)
-      title.value = ''
+      const res = await API.post(apiName, path, { body })
+      if (res.data) {
+        data.value.push(res.data)
+        title.value = ''
+      }
     } catch (e) {
       console.log('error', e)
     }

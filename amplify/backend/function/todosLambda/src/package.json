@@ -9,7 +9,8 @@
     "aws-sdk": "^2.1113.0",
     "aws-serverless-express": "^3.3.5",
     "body-parser": "^1.19.1",
-    "express": "^4.17.2"
+    "express": "^4.17.2",
+    "uuid": "^9.0.0"
   },
   "devDependencies": {
     "@types/aws-lambda": "^8.10.92"

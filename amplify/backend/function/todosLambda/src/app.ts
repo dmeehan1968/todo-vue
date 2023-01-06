@@ -2,7 +2,7 @@ import express, { Request, Response, NextFunction } from 'express'
 import AWS from 'aws-sdk'
 import bodyParser from "body-parser"
 import awsServerlessExpressMiddleware from 'aws-serverless-express/middleware'
-import uuid from 'uuid'
+import { v4 as uuid, validate as validateUUID } from 'uuid'
 import { addAsync } from "@awaitjs/express"
 
 AWS.config.update({ region: process.env.TABLE_REGION })
@@ -80,7 +80,7 @@ app.getAsync<never, Success<Todo[]>>(path, async (req, res) => {
 app.getAsync<{ id: string}, Success<Todo>>(path + '/:id', async (req, res) => {
     const { id } = req.params
 
-    if (!uuid.validate(id)) {
+    if (!validateUUID(id)) {
         throw 'id is not a valid UUID'
     }
 
@@ -97,24 +97,27 @@ app.getAsync<{ id: string}, Success<Todo>>(path + '/:id', async (req, res) => {
 // create item
 app.postAsync<never, Success<any>>(path, async (req, res) => {
 
-    const todo = req.body
-
-    if (!isCreateTodoInput(todo)) {
+    if (!isCreateTodoInput(req.body)) {
         throw 'Request body is not a valid todo'
     }
 
+    const todo: Todo = { ...req.body, id: uuid() }
+
     const data = await dynamodb
-        .put({ TableName, Item: todo })
+        .put({
+            TableName,
+            Item: todo
+        })
         .promise()
 
-    res.json({ data })
+    res.json({ data: todo })
 })
 
 // toggle item
 app.putAsync<{ id: string }, Success<any>>(`${path}/:id`, async (req, res) => {
     const { id } = req.params
 
-    if (!uuid.validate(id)) {
+    if (!validateUUID(id)) {
         throw 'id is not a valid UUID'
     }
 
@@ -127,12 +130,30 @@ app.putAsync<{ id: string }, Success<any>>(`${path}/:id`, async (req, res) => {
     }
 
     const update = await dynamodb
-        .put( { TableName, Item: { ...todo, completed: !todo.completed } })
-        .promise()
+        .update({
+            TableName,
+            Key: { id: todo.id },
+            ConditionExpression: '#completed = :old_completed',
+            UpdateExpression: 'SET #completed = :new_completed',
+            ExpressionAttributeNames: { '#completed': 'completed' },
+            ExpressionAttributeValues: {
+                ':old_completed': todo.completed,
+                ':new_completed': !todo.completed
+            },
+            ReturnValues: 'UPDATED_NEW'
+        }).promise()
 
     res.json({ data: update })
 })
 
+// catch all to return error for bad path/method (malformed client request)
+app.use((req, res) => {
+    res
+        .status(400)
+        .json({ error: `Cannot ${req.method} ${req.url}` })
+})
+
+// error handler to return error response
 app.use<{}, Error>((err: Error, req: Request, res: Response, next: NextFunction) => {
     res
         .status(500)

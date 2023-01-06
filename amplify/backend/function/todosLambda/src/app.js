@@ -8,7 +8,7 @@ const express_1 = __importDefault(require("express"));
 const aws_sdk_1 = __importDefault(require("aws-sdk"));
 const body_parser_1 = __importDefault(require("body-parser"));
 const middleware_1 = __importDefault(require("aws-serverless-express/middleware"));
-const uuid_1 = __importDefault(require("uuid"));
+const uuid_1 = require("uuid");
 const express_2 = require("@awaitjs/express");
 aws_sdk_1.default.config.update({ region: process.env.TABLE_REGION });
 const dynamodb = new aws_sdk_1.default.DynamoDB.DocumentClient();
@@ -56,7 +56,7 @@ exports.app.getAsync(path, async (req, res) => {
 // get item
 exports.app.getAsync(path + '/:id', async (req, res) => {
     const { id } = req.params;
-    if (!uuid_1.default.validate(id)) {
+    if (!(0, uuid_1.validate)(id)) {
         throw 'id is not a valid UUID';
     }
     const data = await dynamodb
@@ -69,19 +69,22 @@ exports.app.getAsync(path + '/:id', async (req, res) => {
 });
 // create item
 exports.app.postAsync(path, async (req, res) => {
-    const todo = req.body;
-    if (!isCreateTodoInput(todo)) {
+    if (!isCreateTodoInput(req.body)) {
         throw 'Request body is not a valid todo';
     }
+    const todo = Object.assign(Object.assign({}, req.body), { id: (0, uuid_1.v4)() });
     const data = await dynamodb
-        .put({ TableName, Item: todo })
+        .put({
+        TableName,
+        Item: todo
+    })
         .promise();
-    res.json({ data });
+    res.json({ data: todo });
 });
 // toggle item
 exports.app.putAsync(`${path}/:id`, async (req, res) => {
     const { id } = req.params;
-    if (!uuid_1.default.validate(id)) {
+    if (!(0, uuid_1.validate)(id)) {
         throw 'id is not a valid UUID';
     }
     const { Item: todo } = await dynamodb
@@ -91,9 +94,24 @@ exports.app.putAsync(`${path}/:id`, async (req, res) => {
         throw 'No matching todo';
     }
     const update = await dynamodb
-        .put({ TableName, Item: Object.assign(Object.assign({}, todo), { completed: !todo.completed }) })
-        .promise();
+        .update({
+        TableName,
+        Key: { id: todo.id },
+        ConditionExpression: '#completed = :old_completed',
+        UpdateExpression: 'SET #completed = :new_completed',
+        ExpressionAttributeNames: { '#completed': 'completed' },
+        ExpressionAttributeValues: {
+            ':old_completed': todo.completed,
+            ':new_completed': !todo.completed
+        },
+        ReturnValues: 'UPDATED_NEW'
+    }).promise();
     res.json({ data: update });
+});
+exports.app.use((req, res) => {
+    res
+        .status(400)
+        .json({ error: `Cannot ${req.method} ${req.url}` });
 });
 exports.app.use((err, req, res, next) => {
     res
