@@ -5,7 +5,7 @@
       "name": "/todos",
       "lambdaFunction": "todosLambda",
       "permissions": {
-        "setting": "protected",
+        "setting": "private",
         "auth": [
           "create",
           "read",
