@@ -5,13 +5,14 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.app = void 0;
 const express_1 = __importDefault(require("express"));
-const aws_sdk_1 = __importDefault(require("aws-sdk"));
+const client_dynamodb_1 = require("@aws-sdk/client-dynamodb");
 const body_parser_1 = __importDefault(require("body-parser"));
 const middleware_1 = __importDefault(require("aws-serverless-express/middleware"));
 const uuid_1 = require("uuid");
 const express_2 = require("@awaitjs/express");
-aws_sdk_1.default.config.update({ region: process.env.TABLE_REGION });
-const dynamodb = new aws_sdk_1.default.DynamoDB.DocumentClient();
+const lib_dynamodb_1 = require("@aws-sdk/lib-dynamodb");
+const ddbclient = new client_dynamodb_1.DynamoDBClient({ region: process.env.TABLE_REGION });
+const dynamodb = lib_dynamodb_1.DynamoDBDocument.from(ddbclient);
 const TableName = `todosTable${process.env.ENV && process.env.ENV !== 'NONE' ? '-' + process.env.ENV : ''}`;
 const path = '/todos';
 exports.app = (0, express_2.addAsync)((0, express_1.default)());
@@ -44,8 +45,7 @@ function isCollection(obj, test) {
 // list
 exports.app.getAsync(path, async (req, res) => {
     const data = await dynamodb
-        .scan({ TableName })
-        .promise();
+        .scan({ TableName });
     if (isCollection(data.Items, isTodo)) {
         res.json({ data: data.Items });
     }
@@ -60,8 +60,7 @@ exports.app.getAsync(path + '/:id', async (req, res) => {
         throw 'id is not a valid UUID';
     }
     const data = await dynamodb
-        .get({ TableName, Key: { id } })
-        .promise();
+        .get({ TableName, Key: { id } });
     if (!isTodo(data.Item)) {
         throw 'Could not fetch item';
     }
@@ -77,8 +76,7 @@ exports.app.postAsync(path, async (req, res) => {
         .put({
         TableName,
         Item: todo
-    })
-        .promise();
+    });
     res.json({ data: todo });
 });
 // toggle item
@@ -88,8 +86,7 @@ exports.app.putAsync(`${path}/:id`, async (req, res) => {
         throw 'id is not a valid UUID';
     }
     const { Item: todo } = await dynamodb
-        .get({ TableName, Key: { id } })
-        .promise();
+        .get({ TableName, Key: { id } });
     if (!isTodo(todo)) {
         throw 'No matching todo';
     }
@@ -105,14 +102,16 @@ exports.app.putAsync(`${path}/:id`, async (req, res) => {
             ':new_completed': !todo.completed
         },
         ReturnValues: 'UPDATED_NEW'
-    }).promise();
+    });
     res.json({ data: update });
 });
+// catch all to return error for bad path/method (malformed client request)
 exports.app.use((req, res) => {
     res
         .status(400)
         .json({ error: `Cannot ${req.method} ${req.url}` });
 });
+// error handler to return error response
 exports.app.use((err, req, res, next) => {
     res
         .status(500)

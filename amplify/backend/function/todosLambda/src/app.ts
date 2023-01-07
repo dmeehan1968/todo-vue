@@ -1,13 +1,13 @@
 import express, { Request, Response, NextFunction } from 'express'
-import AWS from 'aws-sdk'
+import { DynamoDBClient } from '@aws-sdk/client-dynamodb'
 import bodyParser from "body-parser"
 import awsServerlessExpressMiddleware from 'aws-serverless-express/middleware'
 import { v4 as uuid, validate as validateUUID } from 'uuid'
 import { addAsync } from "@awaitjs/express"
+import { DynamoDBDocument } from "@aws-sdk/lib-dynamodb"
 
-AWS.config.update({ region: process.env.TABLE_REGION })
-
-const dynamodb = new AWS.DynamoDB.DocumentClient()
+const ddbclient = new DynamoDBClient({ region: process.env.TABLE_REGION })
+const dynamodb = DynamoDBDocument.from(ddbclient)
 
 const TableName = `todosTable${process.env.ENV && process.env.ENV !== 'NONE' ? '-' + process.env.ENV : ''}`
 const path = '/todos'
@@ -67,7 +67,6 @@ function isCollection<T>(obj: any, test: (obj: any) => boolean): obj is T {
 app.getAsync<never, Success<Todo[]>>(path, async (req, res) => {
     const data = await dynamodb
         .scan({ TableName })
-        .promise()
 
     if (isCollection<Todo[]>(data.Items, isTodo)) {
         res.json({ data: data.Items })
@@ -86,7 +85,6 @@ app.getAsync<{ id: string}, Success<Todo>>(path + '/:id', async (req, res) => {
 
     const data = await dynamodb
         .get({ TableName, Key: { id } })
-        .promise()
 
     if (!isTodo(data.Item)) {
         throw 'Could not fetch item'
@@ -108,7 +106,6 @@ app.postAsync<never, Success<any>>(path, async (req, res) => {
             TableName,
             Item: todo
         })
-        .promise()
 
     res.json({ data: todo })
 })
@@ -123,7 +120,6 @@ app.putAsync<{ id: string }, Success<any>>(`${path}/:id`, async (req, res) => {
 
     const { Item: todo } = await dynamodb
         .get( { TableName, Key: { id } })
-        .promise()
 
     if (!isTodo(todo)) {
         throw 'No matching todo'
@@ -141,7 +137,7 @@ app.putAsync<{ id: string }, Success<any>>(`${path}/:id`, async (req, res) => {
                 ':new_completed': !todo.completed
             },
             ReturnValues: 'UPDATED_NEW'
-        }).promise()
+        })
 
     res.json({ data: update })
 })
