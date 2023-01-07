@@ -9,13 +9,22 @@ const client_dynamodb_1 = require("@aws-sdk/client-dynamodb");
 const body_parser_1 = __importDefault(require("body-parser"));
 const middleware_1 = __importDefault(require("aws-serverless-express/middleware"));
 const uuid_1 = require("uuid");
-const express_2 = require("@awaitjs/express");
 const lib_dynamodb_1 = require("@aws-sdk/lib-dynamodb");
-const ddbclient = new client_dynamodb_1.DynamoDBClient({ region: process.env.TABLE_REGION });
-const dynamodb = lib_dynamodb_1.DynamoDBDocument.from(ddbclient);
 const TableName = `todosTable${process.env.ENV && process.env.ENV !== 'NONE' ? '-' + process.env.ENV : ''}`;
 const path = '/todos';
-exports.app = (0, express_2.addAsync)((0, express_1.default)());
+exports.app = (0, express_1.default)();
+function dynamoDBExpressMiddleware(configuration) {
+    const dbClient = new client_dynamodb_1.DynamoDBClient(configuration);
+    const docClient = lib_dynamodb_1.DynamoDBDocument.from(dbClient);
+    return (req, res, next) => {
+        res.locals.dynamo = docClient;
+        next();
+    };
+}
+function isDynamoDBDocument(obj) {
+    return obj && typeof obj === 'object' && obj.constructor.name === 'DynamoDBDocument';
+}
+exports.app.use(dynamoDBExpressMiddleware({ region: process.env.TABLE_REGION }));
 exports.app.use(body_parser_1.default.json());
 exports.app.use(middleware_1.default.eventContext());
 exports.app.use((req, res, next) => {
@@ -43,55 +52,65 @@ function isCollection(obj, test) {
         && obj.reduce((acc, cur) => acc && test(cur), true);
 }
 // list
-exports.app.getAsync(path, async (req, res) => {
-    const data = await dynamodb
-        .scan({ TableName });
-    if (isCollection(data.Items, isTodo)) {
-        res.json({ data: data.Items });
-    }
-    else {
-        throw 'Could not load items';
-    }
+exports.app.get(path, async (req, res, next) => {
+    const { dynamo } = res.locals;
+    if (!isDynamoDBDocument(dynamo))
+        return next('Dynamo Document client is missing');
+    const { Items: todos } = await dynamo.scan({ TableName });
+    if (!isCollection(todos, isTodo))
+        return next('Could not load items');
+    res.json({ data: todos });
 });
 // get item
-exports.app.getAsync(path + '/:id', async (req, res) => {
+exports.app.get(path + '/:id', async (req, res, next) => {
     const { id } = req.params;
-    if (!(0, uuid_1.validate)(id)) {
-        throw 'id is not a valid UUID';
-    }
-    const data = await dynamodb
-        .get({ TableName, Key: { id } });
-    if (!isTodo(data.Item)) {
-        throw 'Could not fetch item';
-    }
-    res.json({ data: data.Item });
+    if (!(0, uuid_1.validate)(id))
+        return next('id is not a valid UUID');
+    const { dynamo } = res.locals;
+    if (!isDynamoDBDocument(dynamo))
+        return next('Dynamo Document client is missing');
+    const { Item: todo } = await dynamo.get({ TableName, Key: { id } });
+    if (!isTodo(todo))
+        return next('Could not fetch item');
+    res.json({ data: todo });
 });
 // create item
-exports.app.postAsync(path, async (req, res) => {
-    if (!isCreateTodoInput(req.body)) {
-        throw 'Request body is not a valid todo';
-    }
+exports.app.post(path, async (req, res, next) => {
+    const { dynamo } = res.locals;
+    if (!isDynamoDBDocument(dynamo))
+        return next('Dynamo Document client is missing');
+    if (!isCreateTodoInput(req.body))
+        return next('Request body is not a valid todo');
     const todo = Object.assign(Object.assign({}, req.body), { id: (0, uuid_1.v4)() });
-    const data = await dynamodb
-        .put({
+    await dynamo.put({
         TableName,
-        Item: todo
+        Item: todo,
     });
     res.json({ data: todo });
 });
-// toggle item
-exports.app.putAsync(`${path}/:id`, async (req, res) => {
+// delete item
+exports.app.delete(path + '/:id', async (req, res, next) => {
+    const { dynamo } = res.locals;
+    if (!isDynamoDBDocument(dynamo))
+        return next('Dynamo Document client is missing');
     const { id } = req.params;
-    if (!(0, uuid_1.validate)(id)) {
-        throw 'id is not a valid UUID';
-    }
-    const { Item: todo } = await dynamodb
-        .get({ TableName, Key: { id } });
-    if (!isTodo(todo)) {
-        throw 'No matching todo';
-    }
-    const update = await dynamodb
-        .update({
+    if (!(0, uuid_1.validate)(id))
+        return next('id is not a valid UUID');
+    const data = await dynamo.delete({ TableName, Key: { id } });
+    res.json({ data });
+});
+// toggle item
+exports.app.put(`${path}/:id`, async (req, res, next) => {
+    const { dynamo } = res.locals;
+    if (!isDynamoDBDocument(dynamo))
+        return next('Dynamo Document client is missing');
+    const { id } = req.params;
+    if (!(0, uuid_1.validate)(id))
+        return next('id is not a valid UUID');
+    const { Item: todo } = await dynamo.get({ TableName, Key: { id } });
+    if (!isTodo(todo))
+        return next('No matching todo');
+    const update = await dynamo.update({
         TableName,
         Key: { id: todo.id },
         ConditionExpression: '#completed = :old_completed',
@@ -103,7 +122,7 @@ exports.app.putAsync(`${path}/:id`, async (req, res) => {
         },
         ReturnValues: 'UPDATED_NEW'
     });
-    res.json({ data: update });
+    res.json({ data: Object.assign(Object.assign({}, todo), update.Attributes) });
 });
 // catch all to return error for bad path/method (malformed client request)
 exports.app.use((req, res) => {

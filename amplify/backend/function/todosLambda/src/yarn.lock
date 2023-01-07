@@ -2,11 +2,6 @@
 # yarn lockfile v1
 
 
-"@awaitjs/express@^0.9.0":
-  version "0.9.0"
-  resolved "https://registry.npmjs.org/@awaitjs/express/-/express-0.9.0.tgz"
-  integrity sha512-qzZEiDWgy0RBLHKPEkt9eHsh77YRJCkj5Mau/rP+Mwcte9F9iwPX+/Yy2+FABSpz8O2fu2Wr1DF/KNCieUa6eA==
-
 "@aws-crypto/ie11-detection@^2.0.0":
   version "2.0.2"
   resolved "https://registry.npmjs.org/@aws-crypto/ie11-detection/-/ie11-detection-2.0.2.tgz"

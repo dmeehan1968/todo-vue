@@ -86,10 +86,9 @@ function useTodos() {
   async function toggleCompleted(todo: Todo) {
     try {
       const res = await API.put(apiName, `${path}/${todo.id}`, {})
-      console.log(res)
       const index = data.value.findIndex(item => item.id === todo.id)
       if (index >= 0) {
-        data.value[index] = { ...data.value[index], completed: !data.value[index].completed }
+        data.value[index] = res.data
       }
     } catch (e) {
       console.log('error', e)
