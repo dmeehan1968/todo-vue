@@ -5,7 +5,7 @@ import awsServerlessExpressMiddleware from 'aws-serverless-express/middleware'
 import { v4 as uuid, validate as validateUUID } from 'uuid'
 import { DynamoDBDocument } from "@aws-sdk/lib-dynamodb"
 
-const TableName = `todosTable${process.env.ENV && process.env.ENV !== 'NONE' ? '-' + process.env.ENV : ''}`
+const TableName = `userTodosTable${process.env.ENV && process.env.ENV !== 'NONE' ? '-' + process.env.ENV : ''}`
 const path = '/todos'
 
 export const app = express()
@@ -31,6 +31,11 @@ app.use((req, res, next) => {
     res.header('Access-Control-Allow-Origin', '*')
     res.header('Access-Control-Allow-Headers', '*')
     next()
+})
+app.use((req, res) => {
+    if (req.apiGateway) {
+        res.locals.userId = req.apiGateway.event.requestContext.identity.cognitoIdentityId ?? 'UNAUTH'
+    }
 })
 
 interface Success<T> {
@@ -74,15 +79,20 @@ function isCollection<T>(obj: any, test: (obj: any) => boolean): obj is T {
 }
 
 // list
-app.get<never, Success<Todo[]>>(path, async (req, res, next) => {
-    const { dynamo } = res.locals
+app.get<never, Success<any>>(path, async (req, res, next) => {
+    const { dynamo, userId } = res.locals
     if (!isDynamoDBDocument(dynamo)) return next('Dynamo Document client is missing')
 
-    const { Items: todos } = await dynamo.scan({ TableName })
+    // const result = await dynamo.query({
+    //     TableName,
+    //     KeyConditionExpression: 'PK = USER#:userId and begins_with(SK,"TODO#")',
+    //     ExpressionAttributeValues: { ':userId': userId }
+    // })
 
-    if (!isCollection<Todo[]>(todos, isTodo)) return next('Could not load items')
+    // if (!isCollection<Todo[]>(todos, isTodo)) return next('Could not load items')
 
-    res.json({ data: todos })
+    // res.json({ data: todos })
+    res.json({ data: userId })
 })
 
 // get item
@@ -90,10 +100,16 @@ app.get<{ id: string }, Success<Todo>>(path + '/:id', async (req, res, next) => 
     const { id } = req.params
     if (!validateUUID(id)) return next('id is not a valid UUID')
 
-    const { dynamo } = res.locals
+    const { dynamo, userId } = res.locals
     if (!isDynamoDBDocument(dynamo)) return next('Dynamo Document client is missing')
 
-    const { Item: todo } = await dynamo.get({ TableName, Key: { id } })
+    const { Item: todo } = await dynamo.get({
+        TableName,
+        Key: {
+            PK: `USER#${userId}`,
+            SK: `TODO#${id}`,
+        }
+    })
 
     if (!isTodo(todo)) return next('Could not fetch item')
 
@@ -103,49 +119,72 @@ app.get<{ id: string }, Success<Todo>>(path + '/:id', async (req, res, next) => 
 // create item
 app.post<never, Success<Todo>>(path, async (req, res, next) => {
 
-    const { dynamo } = res.locals
+    const { dynamo, userId } = res.locals
     if (!isDynamoDBDocument(dynamo)) return next('Dynamo Document client is missing')
 
     if (!isCreateTodoInput(req.body)) return next('Request body is not a valid todo')
 
-    const todo: Todo = { ...req.body, id: uuid() }
+    const id = uuid()
+    const { name, completed } = req.body
+
+    const Item = {
+        PK: `USER#${userId}`,
+        SK: `TODO#${id}`,
+        name,
+        completed
+    }
 
     await dynamo.put({
         TableName,
-        Item: todo,
+        Item,
     })
 
-    res.json({ data: todo })
+    res.json({ data: { id, name, completed } })
 })
 
 // delete item
 app.delete<{ id: string }, Success<any>>(path + '/:id', async (req, res, next) => {
-    const { dynamo } = res.locals
+    const { dynamo, userId } = res.locals
     if (!isDynamoDBDocument(dynamo)) return next('Dynamo Document client is missing')
 
     const { id } = req.params
     if (!validateUUID(id)) return next('id is not a valid UUID')
 
-    const data = await dynamo.delete({ TableName, Key: { id } })
+    await dynamo.delete({
+        TableName,
+        Key: {
+            PK: `USER#${userId}`,
+            SK: `TODO#${id}`,
+        }
+    })
 
-    res.json({ data })
+    res.json({ data: {} })
 })
 
 // toggle item
 app.put<{ id: string }, Success<Todo>>(`${path}/:id`, async (req, res, next) => {
-    const { dynamo } = res.locals
+    const { dynamo, userId } = res.locals
     if (!isDynamoDBDocument(dynamo)) return next('Dynamo Document client is missing')
 
     const { id } = req.params
     if (!validateUUID(id)) return next('id is not a valid UUID')
 
-    const { Item: todo } = await dynamo.get( { TableName, Key: { id } })
+    const { Item: todo } = await dynamo.get( {
+        TableName,
+        Key: {
+            PK: `USER#${userId}`,
+            SK: `TODO#${id}`,
+        }
+    })
 
     if (!isTodo(todo)) return next('No matching todo')
 
-    const update = await dynamo.update({
+    const updated = await dynamo.update({
         TableName,
-        Key: { id: todo.id },
+        Key: {
+            PK: `USER#${userId}`,
+            SK: `TODO#${todo.id}`,
+        },
         ConditionExpression: '#completed = :old_completed',
         UpdateExpression: 'SET #completed = :new_completed',
         ExpressionAttributeNames: { '#completed': 'completed' },
@@ -156,7 +195,7 @@ app.put<{ id: string }, Success<Todo>>(`${path}/:id`, async (req, res, next) => 
         ReturnValues: 'UPDATED_NEW'
     })
 
-    res.json({ data: { ...todo, ...update.Attributes } })
+    res.json({ data: { ...todo, ...updated.Attributes } })
 })
 
 // catch all to return error for bad path/method (malformed client request)
