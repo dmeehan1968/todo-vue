@@ -9,7 +9,7 @@
     "@aws-sdk/lib-dynamodb": "^3.245.0",
     "aws-serverless-express": "^3.3.5",
     "body-parser": "^1.19.1",
-    "express": "^4.17.2",
+    "express": "^5.0.0-beta.1",
     "uuid": "^9.0.0"
   },
   "devDependencies": {
