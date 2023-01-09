@@ -97,12 +97,12 @@
         "RoleName": {
           "Fn::If": [
             "ShouldNotCreateEnvResources",
-            "todovueLambdaRole8cef43ae",
+            "todovueLambdaRole3cf3efc2",
             {
               "Fn::Join": [
                 "",
                 [
-                  "todovueLambdaRole8cef43ae",
+                  "todovueLambdaRole3cf3efc2",
                   "-",
                   {
                     "Ref": "env"

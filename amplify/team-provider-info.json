@@ -1,26 +1,22 @@
 {
-  "staging": {
+  "dev": {
     "awscloudformation": {
-      "AuthRoleName": "amplify-amplifye43b6cb74b704-staging-161116-authRole",
-      "UnauthRoleArn": "arn:aws:iam::907963324750:role/amplify-amplifye43b6cb74b704-staging-161116-unauthRole",
-      "AuthRoleArn": "arn:aws:iam::907963324750:role/amplify-amplifye43b6cb74b704-staging-161116-authRole",
+      "AuthRoleName": "amplify-todovue-dev-132615-authRole",
+      "UnauthRoleArn": "arn:aws:iam::907963324750:role/amplify-todovue-dev-132615-unauthRole",
+      "AuthRoleArn": "arn:aws:iam::907963324750:role/amplify-todovue-dev-132615-authRole",
       "Region": "eu-west-1",
-      "DeploymentBucketName": "amplify-amplifye43b6cb74b704-staging-161116-deployment",
-      "UnauthRoleName": "amplify-amplifye43b6cb74b704-staging-161116-unauthRole",
-      "StackName": "amplify-amplifye43b6cb74b704-staging-161116",
-      "StackId": "arn:aws:cloudformation:eu-west-1:907963324750:stack/amplify-amplifye43b6cb74b704-staging-161116/ed35b990-8537-11ed-8126-0a70163ce2ef",
-      "AmplifyAppId": "d29gyqxkk9ulnr",
-      "APIGatewayAuthURL": "https://s3.amazonaws.com/amplify-amplifye43b6cb74b704-staging-161116-deployment/amplify-cfn-templates/api/APIGatewayAuthStack.json"
+      "DeploymentBucketName": "amplify-todovue-dev-132615-deployment",
+      "UnauthRoleName": "amplify-todovue-dev-132615-unauthRole",
+      "StackName": "amplify-todovue-dev-132615",
+      "StackId": "arn:aws:cloudformation:eu-west-1:907963324750:stack/amplify-todovue-dev-132615/07a45e60-8f58-11ed-b2eb-026df716465b",
+      "AmplifyAppId": "d4v8ii25ycp0z",
+      "APIGatewayAuthURL": "https://s3.amazonaws.com/amplify-todovue-dev-132615-deployment/amplify-cfn-templates/api/APIGatewayAuthStack.json"
     },
     "categories": {
-      "api": {
-        "todovue": {},
-        "todosApi": {}
-      },
       "function": {
         "todosLambda": {
-          "deploymentBucketName": "amplify-amplifye43b6cb74b704-staging-161116-deployment",
-          "s3Key": "amplify-builds/todosLambda-654e635376366c556b51-build.zip"
+          "deploymentBucketName": "amplify-todovue-dev-132615-deployment",
+          "s3Key": "amplify-builds/todosLambda-3044436d357a39726252-build.zip"
         }
       },
       "auth": {
@@ -28,6 +24,9 @@
       },
       "storage": {
         "todosTable": {}
+      },
+      "api": {
+        "todosApi": {}
       }
     }
   }

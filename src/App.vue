@@ -1,5 +1,5 @@
 <template>
-  <Authenticator>
+  <Authenticator initial-state="signUp">
     <template v-slot="{ user, signOut }">
       <div class="welcome">
         <h3>Hey {{ user.username }}</h3>

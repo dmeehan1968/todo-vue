@@ -2,7 +2,11 @@
   "resourceName": "todosTable",
   "tableName": "todosTable",
   "partitionKey": {
-    "fieldName": "id",
+    "fieldName": "PK",
+    "fieldType": "string"
+  },
+  "sortKey": {
+    "fieldName": "SK",
     "fieldType": "string"
   },
   "gsi": [],

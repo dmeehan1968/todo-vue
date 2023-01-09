@@ -8,7 +8,7 @@
     "preview": "vite preview",
     "build-only": "vite build",
     "type-check": "vue-tsc --noEmit",
-    "amplify:todosLambda": "cd amplify/backend/function/todosLambda/src && tsc"
+    "amplify:todosLambda": "cd amplify/backend/function/todosLambda/src && npm ci && tsc"
   },
   "dependencies": {
     "@aws-amplify/ui-vue": "^3.1.2",

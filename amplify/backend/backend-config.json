@@ -1,37 +1,27 @@
 {
-  "api": {
-    "todovue": {
-      "dependsOn": [],
-      "output": {
-        "authConfig": {
-          "additionalAuthenticationProviders": [
-            {
-              "authenticationType": "AWS_IAM"
-            }
-          ],
-          "defaultAuthentication": {
-            "apiKeyConfig": {
-              "apiKeyExpirationDays": 30,
-              "description": "api key description"
-            },
-            "authenticationType": "API_KEY"
-          }
-        }
-      },
+  "storage": {
+    "todosTable": {
+      "service": "DynamoDB",
+      "providerPlugin": "awscloudformation"
+    }
+  },
+  "function": {
+    "todosLambda": {
+      "build": true,
       "providerPlugin": "awscloudformation",
-      "service": "AppSync"
-    },
-    "todosApi": {
-      "service": "API Gateway",
-      "providerPlugin": "awscloudformation",
+      "service": "Lambda",
       "dependsOn": [
         {
-          "category": "function",
-          "resourceName": "todosLambda",
+          "category": "storage",
+          "resourceName": "todosTable",
           "attributes": [
             "Name",
             "Arn"
-          ]
+          ],
+          "attributeEnvMap": {
+            "Name": "TABLE_NAME",
+            "Arn": "TABLE_ARN"
+          }
         }
       ]
     }
@@ -62,31 +52,20 @@
       }
     }
   },
-  "function": {
-    "todosLambda": {
-      "build": true,
+  "api": {
+    "todosApi": {
+      "service": "API Gateway",
       "providerPlugin": "awscloudformation",
-      "service": "Lambda",
       "dependsOn": [
         {
-          "category": "storage",
-          "resourceName": "todosTable",
+          "category": "function",
+          "resourceName": "todosLambda",
           "attributes": [
             "Name",
             "Arn"
-          ],
-          "attributeEnvMap": {
-            "Name": "TABLE_NAME",
-            "Arn": "TABLE_ARN"
-          }
+          ]
         }
       ]
-    }
-  },
-  "storage": {
-    "todosTable": {
-      "service": "DynamoDB",
-      "providerPlugin": "awscloudformation"
     }
   }
 }
