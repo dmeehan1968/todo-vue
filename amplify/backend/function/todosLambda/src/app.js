@@ -10,6 +10,7 @@ const body_parser_1 = __importDefault(require("body-parser"));
 const middleware_1 = __importDefault(require("aws-serverless-express/middleware"));
 const uuid_1 = require("uuid");
 const lib_dynamodb_1 = require("@aws-sdk/lib-dynamodb");
+const app_guard_1 = require("./app.guard");
 const TableName = `todosTable${process.env.ENV && process.env.ENV !== 'NONE' ? '-' + process.env.ENV : ''}`;
 const path = '/todos';
 exports.app = (0, express_1.default)();
@@ -39,29 +40,14 @@ exports.app.use((req, res, next) => {
     }
     next();
 });
-function isTodoStore(obj) {
-    return obj
-        && typeof obj === 'object'
-        && typeof obj.PK === 'string'
-        && typeof obj.SK === 'string'
-        && typeof obj.name === 'string'
-        && typeof obj.completed === 'boolean';
-}
-function isTodoModel(obj) {
-    return obj
-        && typeof obj === 'object'
-        && typeof obj.id === 'string'
-        && typeof obj.name === 'string'
-        && typeof obj.completed === 'boolean';
-}
 const mapTodoStoreToModel = (item) => {
-    if (!(isTodoStore(item)))
+    if (!((0, app_guard_1.isTodoStore)(item)))
         throw 'Result is not a valid Todo';
     const { SK, name, completed } = item;
     return { id: SK.split('#').pop(), name, completed };
 };
 const mapTodoModelToStore = (userId) => (item) => {
-    if (!(isTodoModel(item)))
+    if (!((0, app_guard_1.isTodoModel)(item)))
         throw 'Result is not a valid Todo';
     const { id, name, completed } = item;
     return { PK: `USER#${userId}`, SK: `TODO#${id}`, name, completed };
@@ -79,7 +65,7 @@ function isCollection(obj, test) {
         && obj.reduce((acc, cur) => acc && test(cur), true);
 }
 // list
-exports.app.get(path, async (req, res, next) => {
+exports.app.get(path, async (req, res) => {
     const { dynamo, userId } = res.locals;
     if (!isDynamoDBDocument(dynamo))
         throw 'Dynamo Document client is missing';
@@ -92,12 +78,12 @@ exports.app.get(path, async (req, res, next) => {
         }
     });
     todos = todos === null || todos === void 0 ? void 0 : todos.map(mapTodoStoreToModel);
-    if (!isCollection(todos, isTodoModel))
+    if (!isCollection(todos, app_guard_1.isTodoModel))
         throw `Could not load items ${todos}`;
     res.json({ data: todos });
 });
 // get item
-exports.app.get(path + '/:id', async (req, res, next) => {
+exports.app.get(path + '/:id', async (req, res) => {
     const { id } = req.params;
     if (!(0, uuid_1.validate)(id))
         throw 'id is not a valid UUID';
@@ -111,15 +97,15 @@ exports.app.get(path + '/:id', async (req, res, next) => {
             SK: `TODO#${id}`,
         }
     });
-    if (!isTodoStore(todo))
+    if (!(0, app_guard_1.isTodoStore)(todo))
         throw 'Item is not a todo';
     todo = mapTodoStoreToModel(todo);
-    if (!isTodoModel(todo))
+    if (!(0, app_guard_1.isTodoModel)(todo))
         throw 'Could not fetch item';
     res.json({ data: todo });
 });
 // create item
-exports.app.post(path, async (req, res, next) => {
+exports.app.post(path, async (req, res) => {
     const { dynamo, userId } = res.locals;
     if (!isDynamoDBDocument(dynamo))
         throw 'Dynamo Document client is missing';
@@ -133,7 +119,7 @@ exports.app.post(path, async (req, res, next) => {
     res.json({ data: mapTodoStoreToModel(Item) });
 });
 // delete item
-exports.app.delete(path + '/:id', async (req, res, next) => {
+exports.app.delete(path + '/:id', async (req, res) => {
     const { dynamo, userId } = res.locals;
     if (!isDynamoDBDocument(dynamo))
         throw 'Dynamo Document client is missing';
@@ -150,7 +136,7 @@ exports.app.delete(path + '/:id', async (req, res, next) => {
     res.json({ data: {} });
 });
 // toggle item
-exports.app.put(`${path}/:id`, async (req, res, next) => {
+exports.app.put(`${path}/:id`, async (req, res) => {
     const { dynamo, userId } = res.locals;
     if (!isDynamoDBDocument(dynamo))
         throw 'Dynamo Document client is missing';
@@ -164,10 +150,10 @@ exports.app.put(`${path}/:id`, async (req, res, next) => {
             SK: `TODO#${id}`,
         }
     });
-    if (!isTodoStore(todo))
+    if (!(0, app_guard_1.isTodoStore)(todo))
         throw 'Item is not a todo';
     todo = mapTodoStoreToModel(todo);
-    if (!isTodoModel(todo))
+    if (!(0, app_guard_1.isTodoModel)(todo))
         throw 'No matching todo';
     const updated = await dynamo.update({
         TableName,

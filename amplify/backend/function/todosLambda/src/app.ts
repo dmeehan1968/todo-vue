@@ -4,6 +4,7 @@ import bodyParser from "body-parser"
 import awsServerlessExpressMiddleware from 'aws-serverless-express/middleware'
 import { v4 as uuid, validate as validateUUID } from 'uuid'
 import { DynamoDBDocument } from "@aws-sdk/lib-dynamodb"
+import { isTodoModel, isTodoStore } from "./app.guard"
 
 const TableName = `todosTable${process.env.ENV && process.env.ENV !== 'NONE' ? '-' + process.env.ENV : ''}`
 const path = '/todos'
@@ -49,35 +50,18 @@ interface Error {
     error: string
 }
 
-interface TodoCommon {
+export interface TodoCommon {
     name: string
     completed: boolean
 }
 
-interface TodoStore extends TodoCommon {
+export interface TodoStore extends TodoCommon {
     PK: string
     SK: string
 }
 
-interface TodoModel extends TodoCommon {
+export interface TodoModel extends TodoCommon {
     id: string
-}
-
-function isTodoStore(obj: any): obj is TodoStore {
-    return obj
-        && typeof obj === 'object'
-        && typeof obj.PK === 'string'
-        && typeof obj.SK === 'string'
-        && typeof obj.name === 'string'
-        && typeof obj.completed === 'boolean'
-}
-
-function isTodoModel(obj: any): obj is TodoModel {
-    return obj
-        && typeof obj === 'object'
-        && typeof obj.id === 'string'
-        && typeof obj.name === 'string'
-        && typeof obj.completed === 'boolean'
 }
 
 const mapTodoStoreToModel = (item: Record<string, any>) => {
