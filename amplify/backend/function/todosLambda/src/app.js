@@ -1,31 +1,95 @@
 "use strict";
+var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
+    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
+    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
+    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
+    return c > 3 && r && Object.defineProperty(target, key, r), r;
+};
+var __metadata = (this && this.__metadata) || function (k, v) {
+    if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
+};
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.app = void 0;
+exports.app = exports.Todo = void 0;
+require("reflect-metadata");
 const express_1 = __importDefault(require("express"));
 const client_dynamodb_1 = require("@aws-sdk/client-dynamodb");
 const body_parser_1 = __importDefault(require("body-parser"));
 const middleware_1 = __importDefault(require("aws-serverless-express/middleware"));
 const uuid_1 = require("uuid");
-const lib_dynamodb_1 = require("@aws-sdk/lib-dynamodb");
 const app_guard_1 = require("./app.guard");
+const common_1 = require("@typedorm/common");
+const core_1 = require("@typedorm/core");
+const document_client_1 = require("@typedorm/document-client");
 const TableName = `todosTable${process.env.ENV && process.env.ENV !== 'NONE' ? '-' + process.env.ENV : ''}`;
 const path = '/todos';
+const TodosTable = new common_1.Table({
+    name: TableName,
+    partitionKey: 'PK',
+    sortKey: 'SK',
+});
+let Todo = class Todo {
+    constructor(userId, name, completed) {
+        this.completed = false;
+        this.userId = userId;
+        this.name = name;
+        this.completed = completed;
+    }
+};
+__decorate([
+    (0, common_1.AutoGenerateAttribute)({ strategy: common_1.AUTO_GENERATE_ATTRIBUTE_STRATEGY.UUID4 }),
+    __metadata("design:type", String)
+], Todo.prototype, "id", void 0);
+__decorate([
+    (0, common_1.Attribute)(),
+    __metadata("design:type", String)
+], Todo.prototype, "userId", void 0);
+__decorate([
+    (0, common_1.Attribute)(),
+    __metadata("design:type", String)
+], Todo.prototype, "name", void 0);
+__decorate([
+    (0, common_1.Attribute)(),
+    __metadata("design:type", Boolean)
+], Todo.prototype, "completed", void 0);
+__decorate([
+    (0, common_1.AutoGenerateAttribute)({ strategy: common_1.AUTO_GENERATE_ATTRIBUTE_STRATEGY.ISO_DATE, autoUpdate: true }),
+    __metadata("design:type", String)
+], Todo.prototype, "updatedAt", void 0);
+Todo = __decorate([
+    (0, common_1.Entity)({
+        name: 'todo',
+        primaryKey: {
+            partitionKey: 'USER#{{userId}}',
+            sortKey: 'TODO#{{id}}'
+        }
+    }),
+    __metadata("design:paramtypes", [String, String, Boolean])
+], Todo);
+exports.Todo = Todo;
+function isTodo(obj) {
+    return obj && typeof obj === 'object'
+        && typeof obj.id === 'string'
+        && typeof obj.userId === 'string'
+        && typeof obj.name === 'string'
+        && typeof obj.completed === 'boolean'
+        && typeof obj.updatedAt === 'string';
+}
 exports.app = (0, express_1.default)();
-function dynamoDBExpressMiddleware(configuration) {
-    const dbClient = new client_dynamodb_1.DynamoDBClient(configuration);
-    const docClient = lib_dynamodb_1.DynamoDBDocument.from(dbClient);
+function typedormMiddleware(configuration) {
+    const documentClient = new document_client_1.DocumentClientV3(new client_dynamodb_1.DynamoDBClient(configuration));
+    (0, core_1.createConnection)({
+        table: TodosTable,
+        entities: [Todo],
+        documentClient,
+    });
     return (req, res, next) => {
-        res.locals.dynamo = docClient;
         next();
     };
 }
-function isDynamoDBDocument(obj) {
-    return obj && typeof obj === 'object' && obj.constructor.name === 'DynamoDBDocument';
-}
-exports.app.use(dynamoDBExpressMiddleware({ region: process.env.TABLE_REGION }));
+exports.app.use(typedormMiddleware({ region: process.env.TABLE_REGION }));
 exports.app.use(body_parser_1.default.json());
 exports.app.use(middleware_1.default.eventContext());
 exports.app.use((req, res, next) => {
@@ -40,25 +104,6 @@ exports.app.use((req, res, next) => {
     }
     next();
 });
-const mapTodoStoreToModel = (item) => {
-    if (!((0, app_guard_1.isTodoStore)(item)))
-        throw 'Result is not a valid Todo';
-    const { SK, name, completed } = item;
-    return { id: SK.split('#').pop(), name, completed };
-};
-const mapTodoModelToStore = (userId) => (item) => {
-    if (!((0, app_guard_1.isTodoModel)(item)))
-        throw 'Result is not a valid Todo';
-    const { id, name, completed } = item;
-    return { PK: `USER#${userId}`, SK: `TODO#${id}`, name, completed };
-};
-function isCreateTodoInput(obj) {
-    return obj
-        && typeof obj === 'object'
-        && typeof obj.id === 'undefined'
-        && typeof obj.name === 'string'
-        && typeof obj.completed === 'boolean';
-}
 function isCollection(obj, test) {
     return obj
         && Array.isArray(obj)
@@ -66,19 +111,12 @@ function isCollection(obj, test) {
 }
 // list
 exports.app.get(path, async (req, res) => {
-    const { dynamo, userId } = res.locals;
-    if (!isDynamoDBDocument(dynamo))
-        throw 'Dynamo Document client is missing';
-    let { Items: todos } = await dynamo.query({
-        TableName,
-        KeyConditionExpression: 'PK = :userId and begins_with(SK,:todoId)',
-        ExpressionAttributeValues: {
-            ':userId': `USER#${userId}`,
-            ':todoId': `TODO#`,
+    const { userId } = res.locals;
+    const { items: todos } = await (0, core_1.getEntityManager)().find(Todo, { userId }, { keyCondition: {
+            BEGINS_WITH: 'TODO#'
         }
     });
-    todos = todos === null || todos === void 0 ? void 0 : todos.map(mapTodoStoreToModel);
-    if (!isCollection(todos, app_guard_1.isTodoModel))
+    if (!isCollection(todos, isTodo))
         throw `Could not load items ${todos}`;
     res.json({ data: todos });
 });
@@ -87,90 +125,42 @@ exports.app.get(path + '/:id', async (req, res) => {
     const { id } = req.params;
     if (!(0, uuid_1.validate)(id))
         throw 'id is not a valid UUID';
-    const { dynamo, userId } = res.locals;
-    if (!isDynamoDBDocument(dynamo))
-        throw 'Dynamo Document client is missing';
-    let { Item: todo } = await dynamo.get({
-        TableName,
-        Key: {
-            PK: `USER#${userId}`,
-            SK: `TODO#${id}`,
-        }
-    });
-    if (!(0, app_guard_1.isTodoStore)(todo))
+    const { userId } = res.locals;
+    const todo = await (0, core_1.getEntityManager)().findOne(Todo, { userId, id });
+    if (!isTodo(todo))
         throw 'Item is not a todo';
-    todo = mapTodoStoreToModel(todo);
-    if (!(0, app_guard_1.isTodoModel)(todo))
-        throw 'Could not fetch item';
     res.json({ data: todo });
 });
 // create item
 exports.app.post(path, async (req, res) => {
-    const { dynamo, userId } = res.locals;
-    if (!isDynamoDBDocument(dynamo))
-        throw 'Dynamo Document client is missing';
-    if (!isCreateTodoInput(req.body))
+    const { userId } = res.locals;
+    if (!(0, app_guard_1.isDraftTodo)(req.body))
         throw 'Request body is not a valid todo';
-    const Item = mapTodoModelToStore(userId)(Object.assign(Object.assign({}, req.body), { id: (0, uuid_1.v4)() }));
-    await dynamo.put({
-        TableName,
-        Item,
-    });
-    res.json({ data: mapTodoStoreToModel(Item) });
+    const todo = await (0, core_1.getEntityManager)().create(new Todo(userId, req.body.name, req.body.completed));
+    if (!isTodo(todo))
+        throw `Creation failed, got ${todo}`;
+    res.json({ data: todo });
 });
 // delete item
 exports.app.delete(path + '/:id', async (req, res) => {
-    const { dynamo, userId } = res.locals;
-    if (!isDynamoDBDocument(dynamo))
-        throw 'Dynamo Document client is missing';
+    const { userId } = res.locals;
     const { id } = req.params;
     if (!(0, uuid_1.validate)(id))
         throw 'id is not a valid UUID';
-    await dynamo.delete({
-        TableName,
-        Key: {
-            PK: `USER#${userId}`,
-            SK: `TODO#${id}`,
-        }
-    });
-    res.json({ data: {} });
+    const { success } = await (0, core_1.getEntityManager)().delete(Todo, { userId, id });
+    res.json({ data: success });
 });
 // toggle item
 exports.app.put(`${path}/:id`, async (req, res) => {
-    const { dynamo, userId } = res.locals;
-    if (!isDynamoDBDocument(dynamo))
-        throw 'Dynamo Document client is missing';
+    const { userId } = res.locals;
     const { id } = req.params;
     if (!(0, uuid_1.validate)(id))
         throw 'id is not a valid UUID';
-    let { Item: todo } = await dynamo.get({
-        TableName,
-        Key: {
-            PK: `USER#${userId}`,
-            SK: `TODO#${id}`,
-        }
-    });
-    if (!(0, app_guard_1.isTodoStore)(todo))
+    const todo = await (0, core_1.getEntityManager)().findOne(Todo, { userId, id });
+    if (!isTodo(todo))
         throw 'Item is not a todo';
-    todo = mapTodoStoreToModel(todo);
-    if (!(0, app_guard_1.isTodoModel)(todo))
-        throw 'No matching todo';
-    const updated = await dynamo.update({
-        TableName,
-        Key: {
-            PK: `USER#${userId}`,
-            SK: `TODO#${todo.id}`,
-        },
-        ConditionExpression: '#completed = :old_completed',
-        UpdateExpression: 'SET #completed = :new_completed',
-        ExpressionAttributeNames: { '#completed': 'completed' },
-        ExpressionAttributeValues: {
-            ':old_completed': todo.completed,
-            ':new_completed': !todo.completed
-        },
-        ReturnValues: 'UPDATED_NEW'
-    });
-    res.json({ data: Object.assign(Object.assign({}, todo), updated.Attributes) });
+    const updated = await (0, core_1.getEntityManager)().update(Todo, todo, Object.assign(Object.assign({}, todo), { completed: !todo.completed }));
+    res.json({ data: updated !== null && updated !== void 0 ? updated : todo });
 });
 // catch all to return error for bad path/method (malformed client request)
 exports.app.use((req, res) => {

@@ -13,7 +13,9 @@
     "sourceMap": false,
     "strict": true,
     "baseUrl": ".",
-    "outDir": "."
+    "outDir": ".",
+    "emitDecoratorMetadata": true,
+    "experimentalDecorators": true
   },
   "include": ["./**/*"],
   "exclude": ["node_modules"]

@@ -10,9 +10,12 @@
   "dependencies": {
     "@aws-sdk/client-dynamodb": "^3.245.0",
     "@aws-sdk/lib-dynamodb": "^3.245.0",
+    "@typedorm/common": "^1.15.3",
+    "@typedorm/core": "^1.15.3",
     "aws-serverless-express": "^3.3.5",
     "body-parser": "^1.19.1",
     "express": "^5.0.0-beta.1",
+    "reflect-metadata": "^0.1.13",
     "uuid": "^9.0.0"
   },
   "devDependencies": {

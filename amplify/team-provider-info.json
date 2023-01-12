@@ -16,7 +16,7 @@
       "function": {
         "todosLambda": {
           "deploymentBucketName": "amplify-todovue-dev-132615-deployment",
-          "s3Key": "amplify-builds/todosLambda-722b4b72795953544e34-build.zip"
+          "s3Key": "amplify-builds/todosLambda-74453553717147506142-build.zip"
         }
       },
       "auth": {

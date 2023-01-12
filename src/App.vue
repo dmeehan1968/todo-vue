@@ -9,11 +9,9 @@
       <p v-if="pending">Loading...</p>
       <ul v-else-if="todos.length ?? false">
         <li v-for="todo in todos">
-          <label>
-            <input type="checkbox" :checked="todo.completed" @click="toggleCompleted(todo)" />
-            {{ todo.name }}
-            (<a href="" @click.prevent="deleteTodo(todo)">X</a>)
-          </label>
+          <input type="checkbox" :checked="todo.completed" @click.prevent="toggleCompleted(todo)" />
+          {{ todo.name }}
+          (<a href="" @click.prevent="deleteTodo(todo)">X</a>)
         </li>
       </ul>
       <p v-else>None found</p>

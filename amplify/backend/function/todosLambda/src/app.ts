@@ -1,31 +1,79 @@
-import express, { Request, Response, NextFunction } from 'express'
+import 'reflect-metadata'
+import express, { NextFunction, Request, Response } from 'express'
 import { DynamoDBClient, DynamoDBClientConfig } from '@aws-sdk/client-dynamodb'
 import bodyParser from "body-parser"
 import awsServerlessExpressMiddleware from 'aws-serverless-express/middleware'
-import { v4 as uuid, validate as validateUUID } from 'uuid'
-import { DynamoDBDocument } from "@aws-sdk/lib-dynamodb"
-import { isTodoModel, isTodoStore } from "./app.guard"
+import { validate as validateUUID } from 'uuid'
+import { isDraftTodo } from "./app.guard"
+import { Attribute, AUTO_GENERATE_ATTRIBUTE_STRATEGY, AutoGenerateAttribute, Entity, Table } from '@typedorm/common'
+import { createConnection, getEntityManager } from '@typedorm/core'
+import { DocumentClientV3 } from "@typedorm/document-client"
 
 const TableName = `todosTable${process.env.ENV && process.env.ENV !== 'NONE' ? '-' + process.env.ENV : ''}`
 const path = '/todos'
 
+const TodosTable = new Table({
+    name: TableName,
+    partitionKey: 'PK',
+    sortKey: 'SK',
+})
+
+@Entity({
+    name: 'todo',
+    primaryKey: {
+        partitionKey: 'USER#{{userId}}',
+        sortKey: 'TODO#{{id}}'
+    }
+})
+export class Todo {
+    @AutoGenerateAttribute({ strategy: AUTO_GENERATE_ATTRIBUTE_STRATEGY.UUID4 })
+    id?: string
+
+    @Attribute()
+    userId: string
+
+    @Attribute()
+    name: string
+
+    @Attribute()
+    completed: boolean = false
+
+    @AutoGenerateAttribute({ strategy: AUTO_GENERATE_ATTRIBUTE_STRATEGY.ISO_DATE, autoUpdate: true })
+    updatedAt?: string
+
+    constructor(userId: string, name: string, completed: boolean) {
+        this.userId = userId
+        this.name = name
+        this.completed = completed
+    }
+}
+
+function isTodo(obj: any): obj is Todo {
+    return obj && typeof obj === 'object'
+        && typeof obj.id === 'string'
+        && typeof obj.userId === 'string'
+        && typeof obj.name === 'string'
+        && typeof obj.completed === 'boolean'
+        && typeof obj.updatedAt === 'string'
+}
+
 export const app = express()
 
-function dynamoDBExpressMiddleware(configuration: DynamoDBClientConfig) {
-    const dbClient = new DynamoDBClient(configuration)
-    const docClient = DynamoDBDocument.from(dbClient)
+function typedormMiddleware(configuration: DynamoDBClientConfig) {
+
+    const documentClient = new DocumentClientV3(new DynamoDBClient(configuration))
+    createConnection({
+        table: TodosTable,
+        entities: [ Todo ],
+        documentClient,
+    })
 
     return (req: Request, res: Response, next: NextFunction) => {
-        res.locals.dynamo = docClient
         next()
     }
 }
 
-function isDynamoDBDocument(obj: any): obj is DynamoDBDocument {
-    return obj && typeof obj === 'object' && obj.constructor.name === 'DynamoDBDocument'
-}
-
-app.use(dynamoDBExpressMiddleware({ region: process.env.TABLE_REGION }))
+app.use(typedormMiddleware({ region: process.env.TABLE_REGION }))
 app.use(bodyParser.json())
 app.use(awsServerlessExpressMiddleware.eventContext())
 app.use((req, res, next) => {
@@ -50,41 +98,7 @@ interface Error {
     error: string
 }
 
-export interface TodoCommon {
-    name: string
-    completed: boolean
-}
-
-export interface TodoStore extends TodoCommon {
-    PK: string
-    SK: string
-}
-
-export interface TodoModel extends TodoCommon {
-    id: string
-}
-
-const mapTodoStoreToModel = (item: Record<string, any>) => {
-    if (!(isTodoStore(item))) throw 'Result is not a valid Todo'
-    const { SK, name, completed } = item
-    return { id: SK.split('#').pop()!, name, completed }
-}
-
-const mapTodoModelToStore = (userId: string) => (item: TodoModel) => {
-    if (!(isTodoModel(item))) throw 'Result is not a valid Todo'
-    const { id, name, completed } = item
-    return { PK: `USER#${userId}`, SK: `TODO#${id}`, name, completed }
-}
-
-type CreateTodoInput = Omit<TodoModel, 'id'>
-
-function isCreateTodoInput(obj: any): obj is CreateTodoInput {
-    return obj
-        && typeof obj === 'object'
-        && typeof obj.id === 'undefined'
-        && typeof obj.name === 'string'
-        && typeof obj.completed === 'boolean'
-}
+export interface DraftTodo extends Pick<Todo, 'name' | 'completed'> {}
 
 function isCollection<T>(obj: any, test: (obj: any) => boolean): obj is T {
     return obj
@@ -93,138 +107,80 @@ function isCollection<T>(obj: any, test: (obj: any) => boolean): obj is T {
 }
 
 // list
-app.get<never, Success<TodoModel[]>>(path, async (req, res) => {
+app.get<never, Success<Todo[]>>(path, async (req, res) => {
 
-    const { dynamo, userId } = res.locals
-    if (!isDynamoDBDocument(dynamo)) throw 'Dynamo Document client is missing'
+    const { userId } = res.locals
 
-    let { Items: todos } = await dynamo.query({
-        TableName,
-        KeyConditionExpression: 'PK = :userId and begins_with(SK,:todoId)',
-        ExpressionAttributeValues: {
-            ':userId': `USER#${userId}`,
-            ':todoId': `TODO#`,
+    const { items: todos } = await getEntityManager().find(Todo, { userId }, { keyCondition: {
+        BEGINS_WITH: 'TODO#'
         }
     })
 
-    todos = todos?.map(mapTodoStoreToModel)
-
-    if (!isCollection<TodoModel[]>(todos, isTodoModel)) throw `Could not load items ${todos}`
+    if (!isCollection<Todo[]>(todos, isTodo)) throw `Could not load items ${todos}`
 
     res.json({ data: todos })
 
 })
 
 // get item
-app.get<{ id: string }, Success<TodoModel>>(path + '/:id', async (req, res) => {
+app.get<{ id: string }, Success<Todo>>(path + '/:id', async (req, res) => {
 
     const { id } = req.params
     if (!validateUUID(id)) throw 'id is not a valid UUID'
 
-    const { dynamo, userId } = res.locals
-    if (!isDynamoDBDocument(dynamo)) throw 'Dynamo Document client is missing'
+    const { userId } = res.locals
 
-    let { Item: todo } = await dynamo.get({
-        TableName,
-        Key: {
-            PK: `USER#${userId}`,
-            SK: `TODO#${id}`,
-        }
-    })
+    const todo = await getEntityManager().findOne(Todo, { userId, id })
 
-    if (!isTodoStore(todo)) throw 'Item is not a todo'
-
-    todo = mapTodoStoreToModel(todo)
-
-    if (!isTodoModel(todo)) throw 'Could not fetch item'
+    if (!isTodo(todo)) throw 'Item is not a todo'
 
     res.json({ data: todo })
 
 })
 
 // create item
-app.post<never, Success<TodoModel>>(path, async (req, res) => {
+app.post<never, Success<Todo>>(path, async (req, res) => {
 
-    const { dynamo, userId } = res.locals
-    if (!isDynamoDBDocument(dynamo)) throw 'Dynamo Document client is missing'
+    const { userId } = res.locals
 
-    if (!isCreateTodoInput(req.body)) throw 'Request body is not a valid todo'
+    if (!isDraftTodo(req.body)) throw 'Request body is not a valid todo'
 
-    const Item = mapTodoModelToStore(userId)({
-        ...req.body,
-        id: uuid()
-    })
+    const todo = await getEntityManager().create<Todo>(new Todo(userId, req.body.name, req.body.completed))
 
-    await dynamo.put({
-        TableName,
-        Item,
-    })
+    if (!isTodo(todo)) throw `Creation failed, got ${todo}`
 
-    res.json({ data: mapTodoStoreToModel(Item) })
+    res.json({ data: todo })
 
 })
 
 // delete item
-app.delete<{ id: string }, Success<any>>(path + '/:id', async (req, res) => {
+app.delete<{ id: string }, Success<boolean>>(path + '/:id', async (req, res) => {
 
-    const { dynamo, userId } = res.locals
-    if (!isDynamoDBDocument(dynamo)) throw 'Dynamo Document client is missing'
-
+    const { userId } = res.locals
     const { id } = req.params
     if (!validateUUID(id)) throw 'id is not a valid UUID'
 
-    await dynamo.delete({
-        TableName,
-        Key: {
-            PK: `USER#${userId}`,
-            SK: `TODO#${id}`,
-        }
-    })
+    const { success } = await getEntityManager().delete(Todo, { userId, id })
 
-    res.json({ data: {} })
+    res.json({ data: success })
 
 })
 
 // toggle item
-app.put<{ id: string }, Success<TodoModel>>(`${path}/:id`, async (req, res) => {
+app.put<{ id: string }, Success<any>>(`${path}/:id`, async (req, res) => {
 
-    const { dynamo, userId } = res.locals
-    if (!isDynamoDBDocument(dynamo)) throw 'Dynamo Document client is missing'
+    const { userId } = res.locals
 
     const { id } = req.params
     if (!validateUUID(id)) throw 'id is not a valid UUID'
 
-    let { Item: todo } = await dynamo.get( {
-        TableName,
-        Key: {
-            PK: `USER#${userId}`,
-            SK: `TODO#${id}`,
-        }
-    })
+    const todo = await getEntityManager().findOne(Todo, { userId, id })
 
-    if (!isTodoStore(todo)) throw 'Item is not a todo'
+    if (!isTodo(todo)) throw 'Item is not a todo'
 
-    todo = mapTodoStoreToModel(todo)
+    const updated = await getEntityManager().update(Todo, todo, { ...todo, completed: !todo.completed })
 
-    if (!isTodoModel(todo)) throw 'No matching todo'
-
-    const updated = await dynamo.update({
-        TableName,
-        Key: {
-            PK: `USER#${userId}`,
-            SK: `TODO#${todo.id}`,
-        },
-        ConditionExpression: '#completed = :old_completed',
-        UpdateExpression: 'SET #completed = :new_completed',
-        ExpressionAttributeNames: { '#completed': 'completed' },
-        ExpressionAttributeValues: {
-            ':old_completed': todo.completed,
-            ':new_completed': !todo.completed
-        },
-        ReturnValues: 'UPDATED_NEW'
-    })
-
-    res.json({ data: { ...todo, ...updated.Attributes } })
+    res.json({ data: updated ?? todo })
 
 })
 
